@@ -1,6 +1,15 @@
 require 'date'
 
 class Rental
+  # Not very elaborated but that's the global idea
+  # New discounts will be added here
+  # Enter new discounts sorted from DESC minimum_days
+  DISCOUNTS = [
+    { minimum_days: 10, discount_percentage: 50 },
+    { minimum_days: 4, discount_percentage: 30 },
+    { minimum_days: 1, discount_percentage: 10 }
+  ].freeze
+
   COMMISSION_RATE = 0.3.freeze
 
   attr_reader :id, :car, :start_date, :end_date, :distance, :total_days
@@ -49,22 +58,26 @@ class Rental
 
   # Sorry for the naming of each variable. I wanted to be accurate for the test
   # In general, I would run Rubocop and fix all problems
+  # Also sorry for the not sexy code. I have lot of tests to do these last days.
+  # I tried to be as explicit as possible without going to deep.
   def calculate_price
-    # We count every time how many days are eligible for each discount
-    nbr_days_eligible_to_50prct_discount = total_days > 10 ? total_days - 10 : 0
-    nbr_days_eligible_to_30prct_discount = total_days > 4 ? total_days - 4 - nbr_days_eligible_to_50prct_discount : 0
-    nbr_days_eligible_to_10prct_discount = total_days > 1 ? total_days - 1 - nbr_days_eligible_to_30prct_discount - nbr_days_eligible_to_50prct_discount : 0
+    # We count how many days are eligible for each discount
+    nbr_days_eligible_to_each_discount = []
+    DISCOUNTS.each do |discount|
+      nbr_days_eligible_to_each_discount << (total_days > discount[:minimum_days] ? total_days - discount[:minimum_days] - nbr_days_eligible_to_each_discount.sum : 0)
+    end
 
-    # Now we apply the specified discount to each days
-    total_discount_for_50prct_eligible_days = get_discount(nbr_days_eligible_to_50prct_discount, 50)
-    total_discount_for_30prct_eligible_days = get_discount(nbr_days_eligible_to_30prct_discount, 30)
-    total_discount_for_10prct_eligible_days = get_discount(nbr_days_eligible_to_10prct_discount, 10)
+    # Now we apply the specific discounts to concerned days
+    discounts_sum = 0
+    nbr_days_eligible_to_each_discount.zip(DISCOUNTS).each do |nbr_days_per_discount, discount|
+      discounts_sum += get_discount(nbr_days_per_discount, discount[:discount_percentage])
+    end
 
     # Finally, we start to compute total time based price without any discount.
-    # To this, we substract the sum of each discount
+    # To this, we substract the sum of discounts
     # And we finish by adding the distance based price
     time_based_price = total_days * car.price_per_day
-    time_based_price_with_discount = time_based_price - total_discount_for_50prct_eligible_days - total_discount_for_30prct_eligible_days -total_discount_for_10prct_eligible_days
+    time_based_price_with_discount = time_based_price - discounts_sum
     distance_based_price = distance * car.price_per_km
 
     (time_based_price_with_discount + distance_based_price).to_i
